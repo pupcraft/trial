@@ -6,14 +6,15 @@
 
 (in-package #:org.shirakumo.fraf.trial.glfw)
 
-(defun foo (&optional (sym :start) (prefix "") (bar "%GLFW"))
-  (multiple-value-bind (sym existsp)
-      (find-symbol
-       (concatenate 'string "+" prefix (symbol-name sym) "+")
-       (find-package bar))
-    (unless existsp
-      (error "symbol not found"))
-    sym))
+(utility:eval-always
+  (defun foo (&optional (sym :start) (prefix "") (bar "%GLFW"))
+    (multiple-value-bind (sym existsp)
+	(find-symbol
+	 (concatenate 'string "+" prefix (symbol-name sym) "+")
+	 (find-package bar))
+      (unless existsp
+	(error "symbol not found"))
+      sym)))
 
 (defmacro cl-glfw3-keyword (keyword &optional (prefix ""))
   (foo keyword prefix))
@@ -36,7 +37,8 @@
 
 (defmethod initialize-instance ((context context) &key)
   (call-next-method)
-  (create-context context))
+  (create-context context)
+  )
 
 (defmethod shared-initialize :after ((context context) slots
                                      &key (version NIL version-p)
@@ -354,35 +356,35 @@
       (:grave-accent :section)
       (T key))))
 
-(defun find-syms ()
-  (let ((acc))
-    (let ((package (find-package "%GLFW")))
-      (do-symbols (sym package)
-	(when (and (boundp sym)
-		   (eq (symbol-package sym)
-		       package))
-	  (push sym acc))))
-    acc))
-
-;;FIXME::assumes %glfw naming conventions
-(defun prefix-type-p (sym string)
-  (let ((prefix (concatenate 'string "+" string "-"))
-	(symbol-name (symbol-name sym)))
-    (if (string=
-	 (safe-subseq symbol-name 0 (length prefix))
-	 prefix)
-	(safe-subseq symbol-name
-		     (length prefix)
-		     (1- (length symbol-name)))
-	nil)))
-
-(defun safe-subseq (seq start end)
-  (let ((len (length seq)))
-    (subseq seq
-	    (min len start)
-	    (min len end))))
 
 (utility:eval-always
+  (defun find-syms ()
+    (let ((acc))
+      (let ((package (find-package "%GLFW")))
+	(do-symbols (sym package)
+	  (when (and (boundp sym)
+		     (eq (symbol-package sym)
+			 package))
+	    (push sym acc))))
+      acc))
+
+  ;;FIXME::assumes %glfw naming conventions
+  (defun prefix-type-p (sym string)
+    (let ((prefix (concatenate 'string "+" string "-"))
+	  (symbol-name (symbol-name sym)))
+      (if (string=
+	   (safe-subseq symbol-name 0 (length prefix))
+	   prefix)
+	  (safe-subseq symbol-name
+		       (length prefix)
+		       (1- (length symbol-name)))
+	  nil)))
+
+  (defun safe-subseq (seq start end)
+    (let ((len (length seq)))
+      (subseq seq
+	      (min len start)
+	      (min len end))))
   (defparameter *keys-hash* (make-hash-table :test 'eql))
   (defparameter *mouse-button-hash* (make-hash-table :test 'eql))
   (defun symstuff ()
