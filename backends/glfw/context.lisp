@@ -16,7 +16,6 @@
     sym))
 
 (defmacro cl-glfw3-keyword (keyword &optional (prefix ""))
-  ;;FIXME:: error if not a legit enum in %glfw
   (foo keyword prefix))
 
 (defvar *window-table* (tg:make-weak-hash-table :test 'eq :weakness :value))
@@ -31,7 +30,7 @@
    :resizable T
    :visible T
    :decorated T
-   :robustness :no-robustness
+   :robustness (cl-glfw3-keyword :no-robustness)
    :forward-compat T
    :debug-context NIL))
 
@@ -78,9 +77,10 @@
         (setf (g :context-version-minor) (second version)))
       (when profile-p
         (setf (g :opengl-profile) (ecase profile
-                                    ((NIL) :opengl-any-profile)
-                                    (:core :opengl-core-profile)
-                                    (:compatibility :opengl-compatibility-profile)))))))
+                                    ((NIL) (cl-glfw3-keyword :opengl-any-profile))
+                                    (:core (cl-glfw3-keyword :opengl-core-profile))
+                                    (:compatibility
+				     (cl-glfw3-keyword :opengl-compat-profile))))))))
 
 (defmethod create-context ((context context))
   (let ((initargs (initargs context)))
@@ -88,23 +88,30 @@
                  `(progn
                     ,@(loop for (name type attrib) in hints
                             collect `(%glfw:window-hint
-                                      ,(or attrib name)
+                                      ,attrib
                                       (cffi:convert-to-foreign
                                        (getf initargs ,name) ,type))))))
       (output-hints
-       (:resizable :boolean)
-       (:visible :boolean)
-       (:decorated :boolean)
-       (:refresh-rate :int)
-       (:stereo-buffer :boolean :stereo)
-       (:context-version-major :int)
-       (:context-version-minor :int)
-       (:context-robustness '%glfw::robustness)
-       (:opengl-forward-compat :boolean)
-       (:opengl-debug-context :boolean)
-       (:opengl-profile '%glfw::opengl-profile)
+       (:resizable :boolean (cl-glfw3-keyword :resizable))
+       (:visible :boolean (cl-glfw3-keyword :visible))
+       (:decorated :boolean (cl-glfw3-keyword :decorated))
+       (:refresh-rate :int (cl-glfw3-keyword :refresh-rate))
+       (:stereo-buffer :boolean (cl-glfw3-keyword :stereo))
+       (:context-version-major :int (cl-glfw3-keyword :context-version-major))
+       (:context-version-minor :int (cl-glfw3-keyword :context-version-minor))
+       (:context-robustness
+	:int ;;FIXME
+	;;'%glfw::robustness
+	(cl-glfw3-keyword :context-robustness)
+	)
+       (:opengl-forward-compat :boolean (cl-glfw3-keyword :opengl-forward-compat))
+       (:opengl-debug-context :boolean (cl-glfw3-keyword :opengl-debug-context))
+       (:opengl-profile
+	:int ;;FIXME
+	;;'%glfw::opengl-profile
+	(cl-glfw3-keyword :opengl-profile))
        ;; This option is not in %glfw for some reason.
-       (:double-buffering :boolean #x00021010))
+       (:double-buffering :boolean (cl-glfw3-keyword :doublebuffer)))
       (v:info :trial.backend.glfw "Creating context ~a" context)
       (let ((window (%glfw:create-window (getf initargs :width)
                                          (getf initargs :height)
@@ -113,9 +120,9 @@
                                          (if (shared-with context)
                                              (window (shared-with context))
                                              (cffi:null-pointer)))))
-        (when (cffi:null-pointer-p window)
+        (when (claw:wrapper-null-p window)
           (error "Error creating context."))
-        (setf (gethash (cffi:pointer-address window) *window-table*) context)
+        (setf (gethash (cffi:pointer-address (claw:ptr window)) *window-table*) context)
         (setf (window context) window)
         (%glfw:make-context-current window)
         (%glfw:set-window-size-callback window (cffi:get-callback 'ctx-size))
@@ -220,6 +227,11 @@
 (defun make-context (&optional handler &rest initargs)
   (apply #'make-instance 'context :handler handler initargs))
 
+(defun coerce-from-glfw3-bool (bool)
+  (cond ((eq (cl-glfw3-keyword :true) bool) t)
+	((eq (cl-glfw3-keyword :false) bool) nil)
+	(t (error "that's not a bool ~a" bool))))
+
 (defun launch-with-context (&optional main &rest initargs)
   (flet ((body ()
            (glfw:with-init ()
@@ -227,7 +239,7 @@
                (start main)
                (unwind-protect
                     (loop with window = (window (trial:context main))
-                          until (%glfw:window-should-close window)
+		       until (coerce-from-glfw3-bool (%glfw:window-should-close window))
                           do (%glfw:poll-events)
                              ;; Apparently bt:thread-yield is a no-op sometimes,
                              ;; making this loop consume the core. Sleep instead.
@@ -323,7 +335,6 @@
               (handler context))
       (setf (mouse-pos context) current))))
 
-;;FIXME
 (defun glfw-button->button (button)
   (let ((button (gethash button *mouse-button-hash*)))
     (case button
@@ -337,7 +348,6 @@
       (:8 :x5)
       (T button))))
 
-;;FIXME
 (defun glfw-key->key (key)
   (let ((key (gethash key *keys-hash*)))
     (case key
