@@ -17,7 +17,9 @@
   :serial T
   :components ((:file "package")
                (:file "context"))
-  :depends-on (:cl-glfw3
+  :depends-on (:bodge-glfw
+	       :glfw-blob
                :trial
                :trivial-main-thread
-               :trivial-garbage))
+               :trivial-garbage
+	       :utility))

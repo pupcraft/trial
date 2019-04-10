@@ -6,6 +6,19 @@
 
 (in-package #:org.shirakumo.fraf.trial.glfw)
 
+(defun foo (&optional (sym :start) (prefix "") (bar "%GLFW"))
+  (multiple-value-bind (sym existsp)
+      (find-symbol
+       (concatenate 'string "+" prefix (symbol-name sym) "+")
+       (find-package bar))
+    (unless existsp
+      (error "symbol not found"))
+    sym))
+
+(defmacro cl-glfw3-keyword (keyword &optional (prefix ""))
+  ;;FIXME:: error if not a legit enum in %glfw
+  (foo keyword prefix))
+
 (defvar *window-table* (tg:make-weak-hash-table :test 'eq :weakness :value))
 
 (defclass context (trial:context)
@@ -90,7 +103,7 @@
        (:opengl-forward-compat :boolean)
        (:opengl-debug-context :boolean)
        (:opengl-profile '%glfw::opengl-profile)
-       ;; This option is not in cl-glfw3 for some reason.
+       ;; This option is not in %glfw for some reason.
        (:double-buffering :boolean #x00021010))
       (v:info :trial.backend.glfw "Creating context ~a" context)
       (let ((window (%glfw:create-window (getf initargs :width)
@@ -104,17 +117,17 @@
           (error "Error creating context."))
         (setf (gethash (cffi:pointer-address window) *window-table*) context)
         (setf (window context) window)
-        (cl-glfw3:make-context-current window)
-        (cl-glfw3:set-window-size-callback 'ctx-size window)
-        (cl-glfw3:set-window-focus-callback 'ctx-focus window)
-        (cl-glfw3:set-key-callback 'ctx-key window)
-        (cl-glfw3:set-char-callback 'ctx-char window)
-        (cl-glfw3:set-mouse-button-callback 'ctx-button window)
-        (cl-glfw3:set-cursor-position-callback 'ctx-pos window)
-        (cl-glfw3:set-scroll-callback 'ctx-scroll window)))))
+        (%glfw:make-context-current window)
+        (%glfw:set-window-size-callback window (cffi:get-callback 'ctx-size))
+        (%glfw:set-window-focus-callback window (cffi:get-callback 'ctx-focus))
+        (%glfw:set-key-callback window (cffi:get-callback 'ctx-key))
+        (%glfw:set-char-callback window (cffi:get-callback 'ctx-char))
+        (%glfw:set-mouse-button-callback window (cffi:get-callback 'ctx-button))
+        (%glfw:set-cursor-pos-callback window (cffi:get-callback 'ctx-pos))
+        (%glfw:set-scroll-callback window (cffi:get-callback 'ctx-scroll))))))
 
 (defmethod destroy-context ((context context))
-  (cl-glfw3:destroy-window (window context))
+  (%glfw:destroy-window (window context))
   (setf (window context) NIL))
 
 (defmethod valid-p ((context context))
@@ -127,34 +140,55 @@
   (%glfw:make-context-current (cffi:null-pointer)))
 
 (defmethod hide ((context context))
-  (cl-glfw3:hide-window (window context)))
+  (%glfw:hide-window (window context)))
 
+(defun get-window-size (window)
+  (cffi:with-foreign-objects ((w :int)
+			      (h :int))
+    (%glfw:get-window-size window w h)
+    (values (cffi:mem-ref w :int)
+	    (cffi:mem-ref h :int))))
+
+(defun set-window-monitor (monitor width height window &key
+							 (x-position 0) (y-position 0)
+							 (refresh-rate %glfw:+dont-care+))
+  (let ((monitor (if (null monitor) (cffi:null-pointer) monitor)))
+    (%glfw:set-window-monitor window monitor x-position y-position width height refresh-rate)))
 (defmethod show ((context context) &key (fullscreen NIL f-p))
-  (cl-glfw3:show-window (window context))
+  (%glfw:show-window (window context))
   (when f-p
-    (destructuring-bind (w h) (cl-glfw3:get-window-size (window context))
-      (cl-glfw3:set-window-monitor (when fullscreen (cl-glfw3:get-primary-monitor))
-                                   w h :window (window context)))))
+    (multiple-value-bind (w h) (get-window-size (window context))
+      (set-window-monitor (when fullscreen (%glfw:get-primary-monitor))
+			  w h (window context)))))
 
 (defmethod resize ((context context) width height)
-  (cl-glfw3:set-window-size width height (window context)))
+  (%glfw:set-window-size (window context) width height))
 
 (defmethod quit ((context context))
-  (cl-glfw3:set-window-should-close (window context) T))
+  (%glfw:set-window-should-close (window context)
+				 (if T
+				     (cl-glfw3-keyword :true)
+				     (cl-glfw3-keyword :false))))
 
 (defmethod swap-buffers ((context context))
-  (cl-glfw3:swap-buffers (window context)))
+  (%glfw:swap-buffers (window context)))
 
 (defmethod show-cursor ((context context))
-  (cl-glfw3:set-input-mode :cursor :normal (window context))
+  (%glfw:set-input-mode (window context)
+			(cl-glfw3-keyword :cursor)
+			(cl-glfw3-keyword :normal "CURSOR-"))
   (setf (cursor-visible context) T))
 
 (defmethod hide-cursor ((context context))
-  (cl-glfw3:set-input-mode :cursor :hidden (window context))
+  (%glfw:set-input-mode (window context)
+			(cl-glfw3-keyword :cursor)
+			(cl-glfw3-keyword :hidden "CURSOR-"))
   (setf (cursor-visible context) NIL))
 
 (defmethod lock-cursor ((context context))
-  (cl-glfw3:set-input-mode :cursor :disabled (window context)))
+  (%glfw:set-input-mode (window context)
+			(cl-glfw3-keyword :cursor)
+			(cl-glfw3-keyword :disabled "CURSOR-")))
 
 (defmethod unlock-cursor ((context context))
   (if (cursor-visible context)
@@ -162,36 +196,39 @@
       (hide-cursor context)))
 
 (defmethod (setf title) :before (value (context context))
-  (cl-glfw3:set-window-title value (window context)))
+  (%glfw:set-window-title (window context) value))
 
 (defmethod width ((context context))
-  (first (cl-glfw3:get-window-size (window context))))
+  (values (get-window-size (window context))))
 
 (defmethod height ((context context))
-  (second (cl-glfw3:get-window-size (window context))))
+  (multiple-value-bind (w h) (get-window-size (window context))
+    (declare (ignore w))
+    h))
 
 (defmethod profile ((context context))
-  (ecase (cl-glfw3:get-window-attribute :opengl-profile (window context))
-    (:opengl-any-profile NIL)
-    (:opengl-core-profile :core)
-    (:opengl-compat-profile :compatibility)))
+  (utility:etouq
+    `(ecase (%glfw:get-window-attrib (window context) (cl-glfw3-keyword :opengl-profile))
+       (,(cl-glfw3-keyword :opengl-any-profile) NIL)
+       (,(cl-glfw3-keyword :opengl-core-profile) :core)
+       (,(cl-glfw3-keyword :opengl-compat-profile) :compatibility))))
 
 (defmethod version ((context context))
-  (list (cl-glfw3:get-window-attribute :context-version-major (window context))
-        (cl-glfw3:get-window-attribute :context-version-minor (window context))))
+  (list (%glfw:get-window-attrib (window context) (cl-glfw3-keyword :context-version-major))
+        (%glfw:get-window-attrib (window context) (cl-glfw3-keyword :context-version-minor))))
 
 (defun make-context (&optional handler &rest initargs)
   (apply #'make-instance 'context :handler handler initargs))
 
 (defun launch-with-context (&optional main &rest initargs)
   (flet ((body ()
-           (cl-glfw3:with-init
+           (glfw:with-init ()
              (let ((main (apply #'make-instance main initargs)))
                (start main)
                (unwind-protect
                     (loop with window = (window (trial:context main))
-                          until (cl-glfw3:window-should-close-p window)
-                          do (cl-glfw3:poll-events)
+                          until (%glfw:window-should-close window)
+                          do (%glfw:poll-events)
                              ;; Apparently bt:thread-yield is a no-op sometimes,
                              ;; making this loop consume the core. Sleep instead.
                              (sleep 0.001))
@@ -206,19 +243,27 @@
   `(let ((context (gethash (cffi:pointer-address window) *window-table*)))
      ,@body))
 
-(cl-glfw3:def-window-size-callback ctx-size (window w h)
+(glfw:define-framebuffer-size-callback ctx-size (window w h)
   (%with-context
     (handle (make-instance 'resize
                            :width w
                            :height h)
             (handler context))))
 
-(cl-glfw3:def-window-focus-callback ctx-focus (window focusedp)
+;;FIXME::add to bodge-glfw
+(defmacro def-window-focus-callback (name (window focusedp) &body body)
+  `(claw:defcallback ,name :void ((,window (:pointer %glfw:window))
+                                  (,focusedp :int) ;;boolean
+				  ;;See https://www.glfw.org/docs/latest/window_guide.html
+				  )
+     ,@body))
+
+(def-window-focus-callback ctx-focus (window focusedp)
   (%with-context
     (handle (make-instance (if focusedp 'gain-focus 'lose-focus))
             (handler context))))
 
-(cl-glfw3:def-key-callback ctx-key (window key scancode action modifiers)
+(glfw:define-key-callback ctx-key (window key scancode action modifiers)
   (declare (ignore scancode))
   (%with-context
     (case action
@@ -235,13 +280,13 @@
                               :modifiers modifiers)
                (handler context))))))
 
-(cl-glfw3:def-char-callback ctx-char (window char)
+(glfw:define-char-callback ctx-char (window char)
   (%with-context
     (handle (make-instance 'text-entered
                            :text (string char))
             (handler context))))
 
-(cl-glfw3:def-mouse-button-callback ctx-button (window button action modifiers)
+(glfw:define-mouse-button-callback ctx-button (window button action modifiers)
   (declare (ignore modifiers))
   (%with-context
     (case action
@@ -258,7 +303,7 @@
                               :button (glfw-button->button button))
                (handler context))))))
 
-(cl-glfw3:def-scroll-callback ctx-scroll (window x y)
+(glfw:define-scroll-callback ctx-scroll (window x y)
   (%with-context
     (v:debug :trial.input "Mouse wheel: ~a ~a" x y)
     (handle (make-instance 'mouse-scroll
@@ -266,28 +311,84 @@
                            :delta y)
             (handler context))))
 
-(cl-glfw3:def-cursor-pos-callback ctx-pos (window x y)
+(glfw:define-cursor-pos-callback ctx-pos (window x y)
   (%with-context
-    (let ((current (vec x (- (second (cl-glfw3:get-window-size (window context))) y))))
+    (let ((current (vec x (- (multiple-value-bind (w h) (get-window-size (window context))
+			       (declare (ignorable w))
+			       h)
+			     y))))
       (handle (make-instance 'mouse-move
                              :pos current
                              :old-pos (mouse-pos context))
               (handler context))
       (setf (mouse-pos context) current))))
 
+;;FIXME
 (defun glfw-button->button (button)
-  (case button
-    ((:1 :left) :left)
-    ((:2 :right) :right)
-    (:3 :middle)
-    (:4 :x1)
-    (:5 :x2)
-    (:6 :x3)
-    (:7 :x4)
-    (:8 :x5)
-    (T button)))
+  (let ((button (gethash button *mouse-button-hash*)))
+    (case button
+      ((:1 :left) :left)
+      ((:2  :right) :right)
+      (:3  :middle)
+      (:4  :x1)
+      (:5  :x2)
+      (:6  :x3)
+      (:7  :x4)
+      (:8 :x5)
+      (T button))))
 
+;;FIXME
 (defun glfw-key->key (key)
-  (case key
-    (:grave-accent :section)
-    (T key)))
+  (let ((key (gethash key *keys-hash*)))
+    (case key
+      (:grave-accent :section)
+      (T key))))
+
+(defun find-syms ()
+  (let ((acc))
+    (let ((package (find-package "%GLFW")))
+      (do-symbols (sym package)
+	(when (and (boundp sym)
+		   (eq (symbol-package sym)
+		       package))
+	  (push sym acc))))
+    acc))
+
+;;FIXME::assumes %glfw naming conventions
+(defun prefix-type-p (sym string)
+  (let ((prefix (concatenate 'string "+" string "-"))
+	(symbol-name (symbol-name sym)))
+    (if (string=
+	 (safe-subseq symbol-name 0 (length prefix))
+	 prefix)
+	(safe-subseq symbol-name
+		     (length prefix)
+		     (1- (length symbol-name)))
+	nil)))
+
+(defun safe-subseq (seq start end)
+  (let ((len (length seq)))
+    (subseq seq
+	    (min len start)
+	    (min len end))))
+
+(utility:eval-always
+  (defparameter *keys-hash* (make-hash-table :test 'eql))
+  (defparameter *mouse-button-hash* (make-hash-table :test 'eql))
+  (defun symstuff ()
+    (let ((syms (find-syms)))
+      (flet ((get-keys (name hash)
+	       (mapcar (lambda (x)
+			 (setf (gethash 
+				(first x)
+				hash)
+			       (utility:keywordify (second x))))
+		       (remove nil
+			       (mapcar (lambda (n)
+					 (list (symbol-value n)
+					       (prefix-type-p n name)))
+				       syms)
+			       :key 'second))))
+	(get-keys "KEY" *keys-hash*)
+	(get-keys "MOUSE-BUTTON" *mouse-button-hash*))))
+  (symstuff))
