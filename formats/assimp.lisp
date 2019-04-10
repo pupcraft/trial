@@ -6,6 +6,19 @@
 
 (in-package #:org.shirakumo.fraf.trial)
 
+(defun vec-from-vector (vec)
+  (case (length vec)
+    (2 (vec (aref vec 0)
+	    (aref vec 1)))
+    (3 (vec (aref vec 0)
+	    (aref vec 1)
+	    (aref vec 2)))
+    (4 (vec (aref vec 0)
+	    (aref vec 1)
+	    (aref vec 2)
+	    (aref vec 3)))
+    (otherwise (error "this vec is too long ~a" vec))))
+
 (defmethod classimp->mesh (source)
   (let* ((mesh (make-instance 'vertex-mesh :vertex-type 'basic+-vertex
                                            :face-length (classimp:primitive-types source)))

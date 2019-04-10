@@ -225,7 +225,9 @@
     (multiple-value-bind (array size etype) (vformat-read-vector buffer)
       (initialize-instance vbo :buffer-type btype
                                :data-usage usage
-                               :element-type etype
+                               :element-type (case etype
+					       (:uint :unsigned-int)
+					       (otherwise etype))
                                :size size
                                :buffer-data array))))
 

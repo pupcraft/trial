@@ -26,8 +26,16 @@
 (defmethod load ((mesh mesh))
   (let* ((input (coerce-asset-input mesh T))
          (input (typecase input
-                  (geometry (gethash (geometry-name mesh) (meshes input)))
-                  (pathname (gethash (geometry-name mesh) (meshes (read-geometry input T))))
+                  (geometry
+		   (let ((hash (meshes input)))
+		     (if (= 1 (hash-table-count hash))
+			 (first (alexandria:hash-table-values hash))
+			 (gethash (geometry-name mesh) hash))))
+                  (pathname
+		   (let ((hash (meshes (read-geometry input T))))
+		     (if (= 1 (hash-table-count hash))
+			 (first (alexandria:hash-table-values hash))
+			 (gethash (geometry-name mesh) hash))))
                   (T input)))
          (vao (etypecase input
                 (vertex-mesh (change-class (copy-instance input) 'vertex-array))

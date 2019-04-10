@@ -6,13 +6,19 @@
 (define-pool workbench
   :base 'trial)
 
+(defparameter *skybox-path* (merge-pathnames "data/nissi-beach/"
+					     (asdf:system-source-directory :trial)))
+
 (define-asset (workbench skybox) image
-    (list #p"/home/linus/models/skycube_tga/posx.tga"
-          #p"/home/linus/models/skycube_tga/negx.tga"
-          #p"/home/linus/models/skycube_tga/posy.tga"
-          #p"/home/linus/models/skycube_tga/negy.tga"
-          #p"/home/linus/models/skycube_tga/posz.tga"
-          #p"/home/linus/models/skycube_tga/negz.tga")
+  (flet ((foo (x)
+	   (merge-pathnames (concatenate 'string x ".jpg") *skybox-path*)))
+    (mapcar #'foo
+	    (list "posx"
+		  "negx"
+		  "posy"
+		  "negy"
+		  "posz"
+		  "negz")))
   :target :texture-cube-map
   :min-filter :linear)
 
@@ -26,30 +32,52 @@
     #p"neutral-normal.png")
 
 ;; Building
-(define-asset (workbench building-a) mesh
-    #p"/home/linus/models/building_08/obj/Building08.obj"
-  :geometry-name "B_Set06_5_A")
-
 (define-asset (workbench building-b) mesh
-    #p"/home/linus/models/building_08/obj/Building08.obj"
-  :geometry-name "B_Set06_5_B")
+
+  ;;#p"/home/linus/models/building_08/obj/Building08.obj"
+  ;;#p"/home/imac/Documents/obj/knight/knight.obj"
+  ;;#p"/home/imac/quicklisp/local-projects/trial/data/teapot.dae"
+  ;;#p"/home/imac/quicklisp/local-projects/trial/data/teapot.vf"
+  ;;#p"/home/imac/quicklisp/local-projects/trial/data/lamp.DAE"
+  #P"/home/imac/Documents/obj/cat/cat.obj"
+  :geometry-name "<dummy_root>"
+  )
+
+(define-asset (workbench building-a) mesh
+  ;;#p"/home/linus/models/building_08/obj/Building08.obj"
+  ;;#p"/home/imac/Documents/obj/knight/knight.obj"
+  ;;#P"/home/imac/Documents/obj/cat/cat.obj"
+  ;#p"/home/imac/quicklisp/local-projects/trial/data/teapot.vf"
+  ;;#+nil
+  ;;"/home/imac/quicklisp/local-projects/trial/data/lamp.DAE"
+  #p"/home/imac/quicklisp/local-projects/trial/data/teapot.dae"
+  :geometry-name "B_Set06_5_B"
+  )
 
 (define-asset (workbench building-a-albedo) image
-    #p"/home/linus/models/building_08/obj/B_Set06_5_A_A.png"
+  ;; #p"/home/linus/models/building_08/obj/B_Set06_5_A_A.png"
+  #p"/home/imac/Documents/obj/knight/armor.jpg"
   :internal-fromat :srgb)
 
 (define-asset (workbench building-b-albedo) image
-    #p"/home/linus/models/building_08/obj/B_Set06_5_B_A.jpg"
+  ;;#p"/home/linus/models/building_08/obj/B_Set06_5_B_A.jpg"
+  #p"/home/imac/Documents/obj/knight/armor.jpg"
   :internal-fromat :srgb)
 
 (define-asset (workbench building-a-specular) image
-    #p"/home/linus/models/building_08/obj/B_Set06_5_A_M.png")
+  ;;#p"/home/linus/models/building_08/obj/B_Set06_5_A_M.png"
+  #p"/home/imac/Documents/obj/knight/armor.jpg"
+  )
 
 (define-asset (workbench building-a-normal) image
-    #p"/home/linus/models/building_08/obj/B_Set06_5_A_N.png")
+  ;;#p"/home/linus/models/building_08/obj/B_Set06_5_A_N.png"
+  #p"/home/imac/Documents/obj/knight/armor.jpg"
+  )
 
 (define-asset (workbench building-a-roughness) image
-    #p"/home/linus/models/building_08/obj/B_Set06_5_A_R.png")
+  #p"/home/imac/Documents/obj/knight/armor.jpg"
+    ;;#p"/home/linus/models/building_08/obj/B_Set06_5_A_R.png"
+  )
 
 ;; Extra
 (define-asset (workbench sphere) mesh
@@ -147,6 +175,9 @@ void main(){
                            :vertex-array (asset 'workbench vert)
                            initargs)
                     scene)))
+      ;;;(print (inspect (asset 'workbench 'building-b)))
+      (print "ASDFADFASDF")
+      #+nil
       (add 'building-a
            'building-a-albedo
            'building-a-specular
@@ -155,20 +186,24 @@ void main(){
            'white
            :scaling (vec 100 100 100)
            :location (vec -400 0 0))
+      
       (add 'building-b
            'building-b-albedo
-           'black
+           'building-a-roughness ;;'black
            'neutral-normal
-           'black
-           'white
-           :scaling (vec 100 100 100)
-           :location (vec -400 0 0)))
-    ;; (dotimes (i (1- MAX-LIGHTS))
-    ;;   (enter (make-instance 'point-light :index (1+ i)
-    ;;                                      :location (vec3-random (- *scene-size*) *scene-size*)
-    ;;                                      :color (vec3-random 500 700)
-    ;;                                      :attenuation '(0.07 0.017))
-    ;;          scene))
+           'building-a-roughness ;;'black
+           'building-a-roughness ;;'white
+           :scaling (vec 100 100 100)		 ;;(vec 100 100 100)
+           :location (vec 50 0 100)	;;(vec -400 0 0)
+	   ))
+    #+nil
+    (dotimes (i 3;(1- MAX-LIGHTS)
+	      )
+      (enter (make-instance 'point-light :index (1+ i)
+                                         :location (vec3-random (- *scene-size*) *scene-size*)
+                                         :color (vec3-random 500 700)
+                                         :attenuation '(0.07 0.017))
+             scene))
     (let* ((shadow (make-instance 'shadow-map-pass :projection-matrix (mortho -800 800 -800 800 1.0 2000)
                                                    :view-matrix (mlookat (vec 400 300 150) (vec 0 0 0) (vec 0 1 0))
                                                    :name :shadow-map-pass))
